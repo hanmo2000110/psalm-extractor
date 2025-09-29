@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>시편 번역본 추출기 (로컬)</title>
+    <title>시편 번역본 추출기</title>
     <style>
         * {
             margin: 0;
@@ -41,6 +41,15 @@
             padding: 15px;
             margin: 20px 0;
             font-size: 0.9em;
+            line-height: 1.6;
+        }
+
+        .setup-info {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 0.85em;
         }
 
         .file-info {
@@ -217,14 +226,17 @@
 
 <body>
     <div class="container">
-        <h1>시편 번역본 추출기 (로컬)</h1>
+        <h1>시편 번역본 추출기</h1>
 
         <div class="info">
-            <strong>사용 방법:</strong><br>
-            1. 이 HTML 파일과 같은 폴더에 엑셀 파일을 두세요<br>
-            2. 아래 스크립트 부분에서 파일명을 수정하세요 (const EXCEL_FILE)<br>
-            3. 로컬 웹서버로 실행하세요: <code>python -m http.server 8000</code><br>
-            4. 브라우저에서 http://localhost:8000 접속
+            <strong>프로그램 안내</strong><br>
+            본 도구는 시편 완성본 파일에서 원하는 번역본만 선택하여 추출할 수 있는 웹 기반 추출기입니다.<br><br>
+
+            <strong>주요 기능</strong><br>
+            • 완성본 파일에 포함된 모든 번역본 자동 감지<br>
+            • 필요한 번역본만 선택적으로 추출 (복수 선택 가능)<br>
+            • 원본과 동일한 형식의 엑셀 파일 생성 (표제어 포함)<br>
+            • 간편한 다운로드 기능 제공
         </div>
 
         <div class="file-info">
@@ -263,7 +275,7 @@
         // ============================================
         // 여기에 파일명을 입력하세요
         // ============================================
-        const EXCEL_FILE = '시편 입력완성본.xlsx';  // 같은 폴더에 있는 엑셀 파일명
+        const EXCEL_FILE = '시편 입력완성본.xlsx';
 
         const el = {
             fileStatus: document.getElementById('fileStatus'),
@@ -288,7 +300,6 @@
         el.extractBtn.addEventListener('click', startExtract);
         el.downloadBtn.addEventListener('click', downloadResult);
 
-        // 페이지 로드 시 자동으로 파일 읽기
         async function autoLoadFile() {
             try {
                 log(`파일 로딩 시도: ${EXCEL_FILE}`);
@@ -312,7 +323,7 @@
                 });
 
                 fileData.base = parseBaseFile(jsonData);
-                el.fileStatus.textContent = `✓ 로드 완료 (${Object.keys(fileData.base.psalms).length}편, ${availableVersions.size}개 번역본)`;
+                el.fileStatus.textContent = `로드 완료 (${Object.keys(fileData.base.psalms).length}편, ${availableVersions.size}개 번역본)`;
                 el.fileStatus.className = 'file-status loaded';
 
                 displayVersionOptions();
@@ -320,7 +331,7 @@
 
             } catch (error) {
                 console.error('파일 로딩 오류:', error);
-                el.fileStatus.textContent = `✗ 오류: ${error.message}`;
+                el.fileStatus.textContent = `오류: ${error.message}`;
                 el.fileStatus.className = 'file-status error';
                 showError(`파일 로딩 오류: ${error.message}\n\n로컬 웹서버를 실행했는지 확인하세요: python -m http.server 8000`);
             }
@@ -331,11 +342,14 @@
             const psalms = {};
             let currentPsalm = null;
             let currentVerse = null;
-            let verseStarted = false;
+            let inTitleSection = false;
             availableVersions.clear();
 
             jsonData.forEach((row, idx) => {
                 if (!row || !row.some(c => c !== null && c !== undefined)) {
+                    if (inTitleSection) {
+                        inTitleSection = false;
+                    }
                     return;
                 }
 
@@ -347,14 +361,37 @@
                     currentPsalm = col0;
                     psalms[currentPsalm] = { titles: [] };
                     currentVerse = null;
-                    verseStarted = false;
+                    inTitleSection = false;
                     return;
                 }
 
                 if (!currentPsalm) return;
 
+                if (col0 && typeof col0 === 'string' && col0.includes('표제어')) {
+                    inTitleSection = true;
+                    if (col1 && col2) {
+                        const version = String(col1).trim();
+                        availableVersions.add(version);
+                        psalms[currentPsalm].titles.push({
+                            version: version,
+                            text: String(col2).trim()
+                        });
+                    }
+                    return;
+                }
+
+                if (inTitleSection && !col0 && col1 && col2) {
+                    const version = String(col1).trim();
+                    availableVersions.add(version);
+                    psalms[currentPsalm].titles.push({
+                        version: version,
+                        text: String(col2).trim()
+                    });
+                    return;
+                }
+
                 if (col0 && typeof col0 === 'string' && col0.includes('절')) {
-                    verseStarted = true;
+                    inTitleSection = false;
                     currentVerse = col0;
                     if (!psalms[currentPsalm][currentVerse]) {
                         psalms[currentPsalm][currentVerse] = [];
@@ -370,24 +407,16 @@
                     return;
                 }
 
-                if (!col0 && col1 && col2) {
+                if (!col0 && col1 && col2 && currentVerse && !inTitleSection) {
                     const version = String(col1).trim();
                     availableVersions.add(version);
-
-                    if (!verseStarted) {
-                        psalms[currentPsalm].titles.push({
-                            version: version,
-                            text: String(col2).trim()
-                        });
-                    } else if (currentVerse) {
-                        if (!psalms[currentPsalm][currentVerse]) {
-                            psalms[currentPsalm][currentVerse] = [];
-                        }
-                        psalms[currentPsalm][currentVerse].push({
-                            version: version,
-                            text: col2
-                        });
+                    if (!psalms[currentPsalm][currentVerse]) {
+                        psalms[currentPsalm][currentVerse] = [];
                     }
+                    psalms[currentPsalm][currentVerse].push({
+                        version: version,
+                        text: col2
+                    });
                 }
             });
 
@@ -635,9 +664,8 @@
             }
         }
 
-        // 페이지 로드 시 자동 실행
         document.addEventListener('DOMContentLoaded', () => {
-            log('시편 번역본 추출기 (로컬) 시작');
+            log('시편 번역본 추출기 시작');
             autoLoadFile();
         });
     </script>
