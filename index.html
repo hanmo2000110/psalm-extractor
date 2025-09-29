@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>시편 번역본 추출기 (로컬)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 1.8em;
+        }
+
+        .info {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 0.9em;
+        }
+
+        .file-info {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .file-info h3 {
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .file-status {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .file-status.loaded {
+            color: #4caf50;
+            font-weight: 500;
+        }
+
+        .file-status.error {
+            color: #f44336;
+        }
+
+        .version-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .version-section h3 {
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+
+        .version-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .version-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .version-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .version-item label {
+            cursor: pointer;
+            font-size: 0.95em;
+        }
+
+        .select-all-btn {
+            background: #11998e;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
+
+        .select-all-btn:hover {
+            background: #0e8577;
+        }
+
+        .extract-btn {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            display: block;
+            margin: 20px auto;
+        }
+
+        .extract-btn:hover {
+            background: #45a049;
+        }
+
+        .extract-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .progress-section {
+            margin: 20px 0;
+            display: none;
+        }
+
+        .progress-bar {
+            background: #e0e0e0;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            background: #11998e;
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .log-section {
+            background: #f5f5f5;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.8em;
+            display: none;
+        }
+
+        .result-section {
+            background: #f0f8f0;
+            border: 2px solid #4caf50;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            text-align: center;
+            display: none;
+        }
+
+        .download-btn {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+
+        .download-btn:hover {
+            background: #45a049;
+        }
+
+        .error {
+            color: #f44336;
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 15px;
+            margin: 10px 0;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>시편 번역본 추출기 (로컬)</h1>
+
+        <div class="info">
+            <strong>사용 방법:</strong><br>
+            1. 이 HTML 파일과 같은 폴더에 엑셀 파일을 두세요<br>
+            2. 아래 스크립트 부분에서 파일명을 수정하세요 (const EXCEL_FILE)<br>
+            3. 로컬 웹서버로 실행하세요: <code>python -m http.server 8000</code><br>
+            4. 브라우저에서 http://localhost:8000 접속
+        </div>
+
+        <div class="file-info">
+            <h3>파일 로딩 상태</h3>
+            <div id="fileStatus" class="file-status">파일 로딩 중...</div>
+        </div>
+
+        <div id="versionSection" class="version-section">
+            <h3>추출할 번역본 선택</h3>
+            <button id="selectAllBtn" class="select-all-btn">전체 선택 / 해제</button>
+            <div id="versionGrid" class="version-grid"></div>
+        </div>
+
+        <button id="extractBtn" class="extract-btn" disabled>선택한 번역본 추출</button>
+
+        <div id="progressSection" class="progress-section">
+            <div class="progress-text" id="progressText">처리 중...</div>
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill" style="width: 0%;"></div>
+            </div>
+        </div>
+
+        <div id="logSection" class="log-section"></div>
+        <div id="errorSection" class="error"></div>
+
+        <div id="resultSection" class="result-section">
+            <h3>추출 완료!</h3>
+            <p id="resultStats"></p>
+            <button id="downloadBtn" class="download-btn">추출 파일 다운로드</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <script>
+        // ============================================
+        // 여기에 파일명을 입력하세요
+        // ============================================
+        const EXCEL_FILE = '시편 입력완성본.xlsx';  // 같은 폴더에 있는 엑셀 파일명
+
+        const el = {
+            fileStatus: document.getElementById('fileStatus'),
+            versionSection: document.getElementById('versionSection'),
+            versionGrid: document.getElementById('versionGrid'),
+            selectAllBtn: document.getElementById('selectAllBtn'),
+            extractBtn: document.getElementById('extractBtn'),
+            downloadBtn: document.getElementById('downloadBtn'),
+            progressSection: document.getElementById('progressSection'),
+            progressFill: document.getElementById('progressFill'),
+            progressText: document.getElementById('progressText'),
+            logSection: document.getElementById('logSection'),
+            errorSection: document.getElementById('errorSection'),
+            resultSection: document.getElementById('resultSection'),
+            resultStats: document.getElementById('resultStats')
+        };
+
+        let fileData = { base: null, result: null };
+        let availableVersions = new Set();
+
+        el.selectAllBtn.addEventListener('click', toggleSelectAll);
+        el.extractBtn.addEventListener('click', startExtract);
+        el.downloadBtn.addEventListener('click', downloadResult);
+
+        // 페이지 로드 시 자동으로 파일 읽기
+        async function autoLoadFile() {
+            try {
+                log(`파일 로딩 시도: ${EXCEL_FILE}`);
+                el.fileStatus.textContent = `${EXCEL_FILE} 로딩 중...`;
+
+                const response = await fetch(EXCEL_FILE);
+                if (!response.ok) {
+                    throw new Error(`파일을 찾을 수 없습니다: ${EXCEL_FILE}`);
+                }
+
+                const arrayBuffer = await response.arrayBuffer();
+                const workbook = XLSX.read(arrayBuffer, {
+                    cellStyles: true,
+                    sheetRows: 0
+                });
+                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+                    header: 1,
+                    defval: null,
+                    blankrows: true
+                });
+
+                fileData.base = parseBaseFile(jsonData);
+                el.fileStatus.textContent = `✓ 로드 완료 (${Object.keys(fileData.base.psalms).length}편, ${availableVersions.size}개 번역본)`;
+                el.fileStatus.className = 'file-status loaded';
+
+                displayVersionOptions();
+                log('파일 로딩 완료');
+
+            } catch (error) {
+                console.error('파일 로딩 오류:', error);
+                el.fileStatus.textContent = `✗ 오류: ${error.message}`;
+                el.fileStatus.className = 'file-status error';
+                showError(`파일 로딩 오류: ${error.message}\n\n로컬 웹서버를 실행했는지 확인하세요: python -m http.server 8000`);
+            }
+        }
+
+        function parseBaseFile(jsonData) {
+            log('파일 파싱 시작');
+            const psalms = {};
+            let currentPsalm = null;
+            let currentVerse = null;
+            let verseStarted = false;
+            availableVersions.clear();
+
+            jsonData.forEach((row, idx) => {
+                if (!row || !row.some(c => c !== null && c !== undefined)) {
+                    return;
+                }
+
+                const col0 = row[0];
+                const col1 = row[1];
+                const col2 = row[2];
+
+                if (col0 && typeof col0 === 'string' && col0.includes('편')) {
+                    currentPsalm = col0;
+                    psalms[currentPsalm] = { titles: [] };
+                    currentVerse = null;
+                    verseStarted = false;
+                    return;
+                }
+
+                if (!currentPsalm) return;
+
+                if (col0 && typeof col0 === 'string' && col0.includes('절')) {
+                    verseStarted = true;
+                    currentVerse = col0;
+                    if (!psalms[currentPsalm][currentVerse]) {
+                        psalms[currentPsalm][currentVerse] = [];
+                    }
+                    if (col1 && col2) {
+                        const version = String(col1).trim();
+                        availableVersions.add(version);
+                        psalms[currentPsalm][currentVerse].push({
+                            version: version,
+                            text: col2
+                        });
+                    }
+                    return;
+                }
+
+                if (!col0 && col1 && col2) {
+                    const version = String(col1).trim();
+                    availableVersions.add(version);
+
+                    if (!verseStarted) {
+                        psalms[currentPsalm].titles.push({
+                            version: version,
+                            text: String(col2).trim()
+                        });
+                    } else if (currentVerse) {
+                        if (!psalms[currentPsalm][currentVerse]) {
+                            psalms[currentPsalm][currentVerse] = [];
+                        }
+                        psalms[currentPsalm][currentVerse].push({
+                            version: version,
+                            text: col2
+                        });
+                    }
+                }
+            });
+
+            log(`파싱 완료: ${Object.keys(psalms).length}편, ${availableVersions.size}개 번역본`);
+            return { psalms };
+        }
+
+        function displayVersionOptions() {
+            el.versionGrid.innerHTML = '';
+            const sortedVersions = Array.from(availableVersions).sort();
+
+            sortedVersions.forEach(version => {
+                const div = document.createElement('div');
+                div.className = 'version-item';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = `ver_${version}`;
+                checkbox.value = version;
+                checkbox.checked = true;
+
+                const label = document.createElement('label');
+                label.htmlFor = `ver_${version}`;
+                label.textContent = version;
+
+                div.appendChild(checkbox);
+                div.appendChild(label);
+                el.versionGrid.appendChild(div);
+            });
+
+            el.versionSection.style.display = 'block';
+            el.extractBtn.disabled = false;
+        }
+
+        function toggleSelectAll() {
+            const checkboxes = el.versionGrid.querySelectorAll('input[type="checkbox"]');
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+            checkboxes.forEach(cb => cb.checked = !allChecked);
+        }
+
+        function getSelectedVersions() {
+            const checkboxes = el.versionGrid.querySelectorAll('input[type="checkbox"]:checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }
+
+        async function startExtract() {
+            const selectedVersions = getSelectedVersions();
+
+            if (selectedVersions.length === 0) {
+                showError('최소 1개 이상의 번역본을 선택해주세요');
+                return;
+            }
+
+            try {
+                clearError();
+                showProgress();
+                log('=== 추출 시작 ===');
+                log(`선택된 번역본: ${selectedVersions.join(', ')}`);
+
+                updateProgress(30, '데이터 필터링 중...');
+                const filtered = filterByVersions(fileData.base.psalms, selectedVersions);
+
+                updateProgress(70, '엑셀 생성 중...');
+                fileData.result = generateExcel(filtered);
+
+                updateProgress(100, '완료!');
+                showResult(filtered, selectedVersions);
+                log('=== 추출 완료 ===');
+
+            } catch (error) {
+                console.error('추출 오류:', error);
+                showError(`추출 오류: ${error.message}`);
+                hideProgress();
+            }
+        }
+
+        function filterByVersions(psalms, selectedVersions) {
+            log('번역본 필터링 중...');
+            const filtered = {};
+
+            for (const psalmKey in psalms) {
+                const psalm = psalms[psalmKey];
+                filtered[psalmKey] = { titles: [] };
+
+                if (psalm.titles && psalm.titles.length > 0) {
+                    filtered[psalmKey].titles = psalm.titles.filter(t =>
+                        selectedVersions.includes(t.version)
+                    );
+                }
+
+                for (const verseKey in psalm) {
+                    if (verseKey === 'titles') continue;
+
+                    const translations = psalm[verseKey];
+                    if (Array.isArray(translations)) {
+                        const filteredTrans = translations.filter(t =>
+                            selectedVersions.includes(t.version)
+                        );
+                        if (filteredTrans.length > 0) {
+                            filtered[psalmKey][verseKey] = filteredTrans;
+                        }
+                    }
+                }
+            }
+
+            log('필터링 완료');
+            return filtered;
+        }
+
+        function generateExcel(psalms) {
+            log('엑셀 파일 생성');
+            const data = [];
+
+            const psalmKeys = Object.keys(psalms).sort((a, b) => {
+                return parseInt(a) - parseInt(b);
+            });
+
+            for (const psalmKey of psalmKeys) {
+                const psalm = psalms[psalmKey];
+
+                data.push([psalmKey, '', '']);
+
+                if (psalm.titles && psalm.titles.length > 0) {
+                    psalm.titles.forEach((t, i) => {
+                        if (i === 0) {
+                            data.push(['표제어', t.version, t.text]);
+                        } else {
+                            data.push(['', t.version, t.text]);
+                        }
+                    });
+                    data.push(['', '', '']);
+                }
+
+                const verseKeys = Object.keys(psalm)
+                    .filter(k => k !== 'titles')
+                    .sort((a, b) => parseInt(a) - parseInt(b));
+
+                for (const verseKey of verseKeys) {
+                    const translations = psalm[verseKey];
+                    if (!translations || !Array.isArray(translations) || translations.length === 0) continue;
+
+                    translations.forEach((t, i) => {
+                        data.push([
+                            i === 0 ? verseKey : '',
+                            t.version,
+                            t.text
+                        ]);
+                    });
+
+                    data.push(['', '', '']);
+                }
+            }
+
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            ws['!cols'] = [
+                { width: 8 }, { width: 15 }, { width: 80 }
+            ];
+            XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+
+            const buffer = XLSX.write(wb, {
+                bookType: 'xlsx',
+                type: 'array',
+                compression: true
+            });
+
+            log(`엑셀 생성 완료: ${data.length}행`);
+            return new Uint8Array(buffer);
+        }
+
+        function updateProgress(percent, message) {
+            el.progressFill.style.width = percent + '%';
+            el.progressText.textContent = message;
+        }
+
+        function showProgress() {
+            el.progressSection.style.display = 'block';
+            el.logSection.style.display = 'block';
+        }
+
+        function hideProgress() {
+            el.progressSection.style.display = 'none';
+        }
+
+        function log(message) {
+            console.log(message);
+            const div = document.createElement('div');
+            div.textContent = message;
+            el.logSection.appendChild(div);
+            el.logSection.scrollTop = el.logSection.scrollHeight;
+        }
+
+        function showError(message) {
+            el.errorSection.textContent = message;
+            el.errorSection.style.display = 'block';
+        }
+
+        function clearError() {
+            el.errorSection.style.display = 'none';
+        }
+
+        function showResult(filtered, selectedVersions) {
+            const psalmCount = Object.keys(filtered).length;
+            let verseCount = 0;
+            let transCount = 0;
+
+            for (const psalm of Object.values(filtered)) {
+                for (const verse of Object.values(psalm)) {
+                    if (Array.isArray(verse)) {
+                        verseCount++;
+                        transCount += verse.length;
+                    }
+                }
+            }
+
+            el.resultStats.innerHTML = `
+                ${selectedVersions.length}개 번역본 추출 완료<br>
+                총 ${psalmCount}편 | ${verseCount}절 | ${transCount}개 번역
+            `;
+            el.resultSection.style.display = 'block';
+            hideProgress();
+        }
+
+        function downloadResult() {
+            if (!fileData.result) {
+                showError('다운로드할 파일이 없습니다');
+                return;
+            }
+
+            try {
+                const blob = new Blob([fileData.result], {
+                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `시편_추출_${new Date().toISOString().split('T')[0]}.xlsx`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                log('다운로드 완료');
+            } catch (error) {
+                showError(`다운로드 오류: ${error.message}`);
+            }
+        }
+
+        // 페이지 로드 시 자동 실행
+        document.addEventListener('DOMContentLoaded', () => {
+            log('시편 번역본 추출기 (로컬) 시작');
+            autoLoadFile();
+        });
+    </script>
+</body>
+
+</html>
