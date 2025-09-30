@@ -33,6 +33,16 @@
             color: #333;
             margin-bottom: 30px;
             font-size: 1.8em;
+            position: relative;
+        }
+
+        .version {
+            position: absolute;
+            right: 0;
+            top: 0;
+            font-size: 0.4em;
+            color: #999;
+            font-weight: normal;
         }
 
         .info {
@@ -226,7 +236,10 @@
 
 <body>
     <div class="container">
-        <h1>시편 번역본 추출기</h1>
+        <h1>
+            시편 번역본 추출기
+            <span class="version">v1.0</span>
+        </h1>
 
         <div class="info">
             <strong>프로그램 안내</strong><br>
